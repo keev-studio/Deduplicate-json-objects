@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=keev-studio.deduplicate-json-objects"><img src="https://img.shields.io/visual-studio-marketplace/v/keev-studio.deduplicate-json-objects?color=blue&label=VS%20Code%20Marketplace" alt="Visual Studio Marketplace Version"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=keev-studio.deduplicate-json-objects"><img src="https://img.shields.io/visual-studio-marketplace/d/keev-studio.deduplicate-json-objects?color=green" alt="Visual Studio Marketplace Downloads"></a>
-  <a href="https://github.com/keev-studio/deduplicate-json-objects/blob/main/LICENSE"><img src="https://img.shields.io/github/license/keev-studio/deduplicate-json-objects?color=orange" alt="License"></a>
+  <a href="https://github.com/keev-studio/deduplicate-json-objects/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/keev-studio/deduplicate-json-objects?color=orange" alt="License"></a>
 </p>
 
 ## 📋 Overview
@@ -54,8 +54,8 @@ A Visual Studio Code extension that helps you clean up JSON files by removing du
   },
   {
     "id": 795,
-    "quoteText": "Fortune favours the brave.",
-    "quoteAuthor": "Terence"
+    "quoteText": "Keep building!",
+    "quoteAuthor": "Bob the Builder"
   }
 ]
 ```
@@ -67,6 +67,11 @@ A Visual Studio Code extension that helps you clean up JSON files by removing du
     "id": 793,
     "quoteText": "Fortune favours the brave.",
     "quoteAuthor": "Virgil"
+  },
+  {
+    "id": 795,
+    "quoteText": "Keep building!",
+    "quoteAuthor": "Bob the Builder"
   }
 ]
 ```
