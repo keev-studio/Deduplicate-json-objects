@@ -1,9 +1,13 @@
 # Deduplicate Objects from JSON
 
 <p align="center">
+  <img src="images/logo.png" alt="Deduplicate Objects from JSON Logo" width="128">
+</p>
+
+<p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=keev-studio.deduplicate-json-objects"><img src="https://img.shields.io/visual-studio-marketplace/v/keev-studio.deduplicate-json-objects?color=blue&label=VS%20Code%20Marketplace" alt="Visual Studio Marketplace Version"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=keev-studio.deduplicate-json-objects"><img src="https://img.shields.io/visual-studio-marketplace/d/keev-studio.deduplicate-json-objects?color=green" alt="Visual Studio Marketplace Downloads"></a>
-  <a href="https://github.com/keev-studio/deduplicate-json-objects/blob/main/LICENSE"><img src="https://img.shields.io/github/license/keev-studio/deduplicate-json-objects?color=orange" alt="License"></a>
+  <a href="https://github.com/keev-studio/deduplicate-json-objects/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/keev-studio/deduplicate-json-objects?color=orange" alt="License"></a>
 </p>
 
 ## 📋 Overview
@@ -50,12 +54,7 @@ A Visual Studio Code extension that helps you clean up JSON files by removing du
   },
   {
     "id": 795,
-    "quoteText": "Fortune favours the brave.",
-    "quoteAuthor": "Terence"
-  },
-  {
-    "id": 796,
-    "quoteText": "Build, build more",
+    "quoteText": "Keep building!",
     "quoteAuthor": "Bob the Builder"
   }
 ]
@@ -70,8 +69,8 @@ A Visual Studio Code extension that helps you clean up JSON files by removing du
     "quoteAuthor": "Virgil"
   },
   {
-    "id": 796,
-    "quoteText": "Build, build more",
+    "id": 795,
+    "quoteText": "Keep building!",
     "quoteAuthor": "Bob the Builder"
   }
 ]
