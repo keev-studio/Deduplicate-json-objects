@@ -2,7 +2,7 @@
   "name": "deduplicate-json-objects",
   "displayName": "Deduplicate Objects from JSON",
   "description": "Removes duplicate objects from JSON files based on a specified field",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "keev-studio",
   "author": {
       "name": "Keev Studio"
