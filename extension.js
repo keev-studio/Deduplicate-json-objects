@@ -3,118 +3,230 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Optimized function to remove duplicate objects while preserving exact formatting
+ * Detects the most common indentation used in a JSON string with high accuracy
+ * @param {string} text - The JSON text to analyze
+ * @returns {string|number} - The detected indentation (string for tabs, number for spaces)
  */
-function removeObjectsPreservingFormat(text, indicesToRemove) {
-    if (indicesToRemove.length === 0) return text;
-    
+function detectIndentation(text) {
     const lines = text.split('\n');
-    const result = [];
-    const removeSet = new Set(indicesToRemove); // O(1) lookup instead of O(n)
+    const indentationSamples = [];
+    const tabCount = [];
+    let hasTabIndentation = false;
+    let hasSpaceIndentation = false;
     
-    let bracketDepth = 0;
-    let inObject = false;
-    let currentObjectIndex = -1;
-    let skipObject = false;
-    
+    // Analyze each line for indentation patterns
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmed = line.trim();
         
-        // Track bracket depth and object boundaries
-        if (trimmed === '{') {
-            bracketDepth++;
-            if (bracketDepth === 2) { // Top-level object (depth 2 because array is depth 1)
-                inObject = true;
-                currentObjectIndex++;
-                skipObject = removeSet.has(currentObjectIndex);
-            }
+        // Skip empty lines and lines with only closing brackets/braces
+        if (trimmed === '' || trimmed.match(/^[\}\]],?$/)) {
+            continue;
         }
         
-        if (trimmed.includes('}')) {
-            const closingBrackets = (trimmed.match(/}/g) || []).length;
-            bracketDepth -= closingBrackets;
+        // Check for leading whitespace
+        const match = line.match(/^(\s+)/);
+        if (match) {
+            const whitespace = match[1];
             
-            if (bracketDepth === 1 && inObject) { // End of top-level object
-                inObject = false;
-                if (skipObject) {
-                    skipObject = false;
-                    continue; // Skip this closing line
+            // Check for tabs
+            if (whitespace.includes('\t')) {
+                hasTabIndentation = true;
+                const tabOnlyMatch = whitespace.match(/^\t+/);
+                if (tabOnlyMatch) {
+                    tabCount.push(tabOnlyMatch[0].length);
+                }
+            }
+            
+            // Check for spaces (only if no tabs in this line)
+            if (!whitespace.includes('\t') && whitespace.length > 0) {
+                hasSpaceIndentation = true;
+                indentationSamples.push(whitespace.length);
+            }
+        }
+    }
+    
+    // If we found both tabs and spaces, determine which is more common
+    if (hasTabIndentation && hasSpaceIndentation) {
+        // Count lines with tabs vs spaces
+        let tabLines = 0;
+        let spaceLines = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const match = line.match(/^(\s+)/);
+            if (match) {
+                if (match[1].includes('\t')) {
+                    tabLines++;
+                } else {
+                    spaceLines++;
                 }
             }
         }
         
-        // Skip lines if we're removing this object
-        if (!skipObject) {
-            result.push(line);
+        // Use the more common indentation type
+        if (tabLines > spaceLines) {
+            return '\t';
+        }
+        // Continue with space analysis below
+    } else if (hasTabIndentation) {
+        return '\t';
+    }
+    
+    // Analyze space indentation patterns
+    if (indentationSamples.length === 0) {
+        return 2; // Default fallback
+    }
+    
+    // Find the most likely base indentation unit
+    const possibleUnits = [2, 3, 4, 5, 6, 8];
+    const unitScores = new Map();
+    
+    // Score each possible unit based on how well it explains the indentation samples
+    for (const unit of possibleUnits) {
+        let score = 0;
+        const levelCounts = new Map();
+        
+        for (const sample of indentationSamples) {
+            const level = Math.round(sample / unit);
+            const expectedIndent = level * unit;
+            
+            // Give higher score for exact matches
+            if (sample === expectedIndent) {
+                score += 10;
+                levelCounts.set(level, (levelCounts.get(level) || 0) + 1);
+            }
+            // Give lower score for close matches (off by 1)
+            else if (Math.abs(sample - expectedIndent) <= 1) {
+                score += 3;
+                levelCounts.set(level, (levelCounts.get(level) || 0) + 1);
+            }
+            // Penalize for poor matches
+            else if (Math.abs(sample - expectedIndent) > 2) {
+                score -= 2;
+            }
+        }
+        
+        // Bonus for having multiple samples at the same level (consistency)
+        for (const count of levelCounts.values()) {
+            if (count > 1) {
+                score += count * 2;
+            }
+        }
+        
+        unitScores.set(unit, score);
+    }
+    
+    // Find the unit with the highest score
+    let bestUnit = 2;
+    let bestScore = -Infinity;
+    
+    for (const [unit, score] of unitScores) {
+        if (score > bestScore) {
+            bestScore = score;
+            bestUnit = unit;
         }
     }
     
-    return cleanupCommas(result);
+    // Additional validation: check if the best unit makes sense
+    if (bestScore > 0) {
+        // Verify that the majority of samples are consistent with this unit
+        let consistentSamples = 0;
+        for (const sample of indentationSamples) {
+            const level = Math.round(sample / bestUnit);
+            const expectedIndent = level * bestUnit;
+            if (Math.abs(sample - expectedIndent) <= 1) {
+                consistentSamples++;
+            }
+        }
+        
+        // If less than 60% of samples are consistent, fall back to most common sample
+        if (consistentSamples / indentationSamples.length < 0.6) {
+            return getMostCommonIndentation(indentationSamples);
+        }
+    }
+    
+    return bestUnit;
 }
 
 /**
- * Optimized comma cleanup - works directly on array to avoid string operations
+ * Fallback method: find the most frequently occurring indentation
+ * @param {number[]} samples - Array of indentation samples
+ * @returns {number} - Most common indentation
  */
-function cleanupCommas(lines) {
-    const result = [];
+function getMostCommonIndentation(samples) {
+    const frequency = new Map();
     
+    for (const sample of samples) {
+        frequency.set(sample, (frequency.get(sample) || 0) + 1);
+    }
+    
+    let mostCommon = 2;
+    let maxCount = 0;
+    
+    for (const [indent, count] of frequency) {
+        if (count > maxCount) {
+            maxCount = count;
+            mostCommon = indent;
+        }
+    }
+    
+    return mostCommon;
+}
+
+/**
+ * Enhanced version with debugging info (optional)
+ * @param {string} text - The JSON text to analyze
+ * @param {boolean} debug - Whether to log debugging information
+ * @returns {object} - Object with detected indentation and debug info
+ */
+function detectIndentationWithDebug(text, debug = false) {
+    const lines = text.split('\n');
+    const indentationSamples = [];
+    const debugInfo = {
+        totalLines: lines.length,
+        analyzedLines: 0,
+        samples: [],
+        hasTabIndentation: false,
+        hasSpaceIndentation: false
+    };
+    
+    // Collect all indentation samples
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+        const line = lines[i];
         const trimmed = line.trim();
         
-        // Handle trailing comma before closing bracket
-        if (trimmed.endsWith('},') || trimmed.endsWith('}')) {
-            // Look ahead for closing bracket
-            for (let j = i + 1; j < lines.length; j++) {
-                const nextTrimmed = lines[j].trim();
-                if (nextTrimmed === '') continue; // Skip empty lines
-                
-                if (nextTrimmed === ']') {
-                    // Remove trailing comma
-                    line = line.replace(/,(\s*)$/, '$1');
-                }
-                break;
-            }
+        if (trimmed === '' || trimmed.match(/^[\}\]],?$/)) {
+            continue;
         }
         
-        // Skip empty lines that would create syntax errors
-        if (trimmed === ',' && result.length > 0) {
-            const lastTrimmed = result[result.length - 1].trim();
-            if (lastTrimmed === '[' || lastTrimmed === '') {
-                continue;
+        const match = line.match(/^(\s+)/);
+        if (match) {
+            const whitespace = match[1];
+            debugInfo.analyzedLines++;
+            
+            if (whitespace.includes('\t')) {
+                debugInfo.hasTabIndentation = true;
+                if (debug) debugInfo.samples.push(`Line ${i + 1}: TAB`);
+            } else {
+                debugInfo.hasSpaceIndentation = true;
+                indentationSamples.push(whitespace.length);
+                if (debug) debugInfo.samples.push(`Line ${i + 1}: ${whitespace.length} spaces`);
             }
-        }
-        
-        result.push(line);
-    }
-    
-    return result.join('\n');
-}
-
-/**
- * Single-pass JSON parsing to find duplicates
- */
-function findDuplicateIndices(jsonData, selectedKey) {
-    const seenValues = new Map();
-    const indicesToRemove = [];
-    
-    for (let i = 0; i < jsonData.length; i++) {
-        const item = jsonData[i];
-        const keyValue = item[selectedKey];
-        
-        if (keyValue === undefined) continue;
-        
-        const keyStr = typeof keyValue === 'string' ? keyValue : JSON.stringify(keyValue);
-        
-        if (seenValues.has(keyStr)) {
-            indicesToRemove.push(i);
-        } else {
-            seenValues.set(keyStr, i); // Store index for potential future use
         }
     }
     
-    return indicesToRemove;
+    const detectedIndentation = detectIndentation(text);
+    
+    if (debug) {
+        console.log('Indentation Detection Debug:', debugInfo);
+        console.log('Detected indentation:', detectedIndentation);
+    }
+    
+    return {
+        indentation: detectedIndentation,
+        debugInfo: debugInfo
+    };
 }
 
 /**
@@ -124,12 +236,14 @@ function activate(context) {
     console.log('Deduplicate Objects from JSON is now active');
 
     let disposable = vscode.commands.registerCommand('deduplicate-json-objects.removeDuplicates', async function () {
+        // Get the active text editor
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showErrorMessage('No active editor found. Please open a JSON file.');
             return;
         }
 
+        // Check if the file is a JSON file
         const fileName = editor.document.fileName;
         if (path.extname(fileName).toLowerCase() !== '.json') {
             vscode.window.showErrorMessage('The active file is not a JSON file.');
@@ -137,11 +251,14 @@ function activate(context) {
         }
 
         try {
+            // Get the content of the file
             const document = editor.document;
             const text = document.getText();
-            
-            // Single JSON parse for validation and processing
             let jsonData;
+
+            // Detect original indentation with enhanced accuracy
+            const originalIndentation = detectIndentation(text);
+
             try {
                 jsonData = JSON.parse(text);
             } catch (e) {
@@ -149,7 +266,7 @@ function activate(context) {
                 return;
             }
 
-            // Early validation
+            // Check if the JSON is an array of objects
             if (!Array.isArray(jsonData)) {
                 vscode.window.showErrorMessage('The JSON file must contain an array of objects.');
                 return;
@@ -160,52 +277,60 @@ function activate(context) {
                 return;
             }
 
-            // Get available keys
+            // Get available keys to compare for duplication
             const sampleObj = jsonData[0];
-            if (typeof sampleObj !== 'object' || sampleObj === null) {
-                vscode.window.showErrorMessage('The JSON array must contain objects.');
-                return;
-            }
-
             const keys = Object.keys(sampleObj);
-            if (keys.length === 0) {
-                vscode.window.showErrorMessage('Objects in the array have no properties to compare.');
-                return;
-            }
             
-            // User key selection
+            // Ask the user which key to use for comparison
             const selectedKey = await vscode.window.showQuickPick(keys, {
                 placeHolder: 'Select a property to use for duplicate comparison',
                 canPickMany: false
             });
 
-            if (!selectedKey) return; // User cancelled
-
-            // Find duplicates in single pass
-            const indicesToRemove = findDuplicateIndices(jsonData, selectedKey);
-            
-            if (indicesToRemove.length === 0) {
-                vscode.window.showInformationMessage('No duplicates found.');
+            if (!selectedKey) {
+                // User cancelled the operation
                 return;
             }
 
-            // Remove objects while preserving formatting
-            const resultText = removeObjectsPreservingFormat(text, indicesToRemove);
+            // Perform deduplication
+            const uniqueMap = new Map();
+            const uniqueData = [];
 
-            // Apply edit
+            for (const item of jsonData) {
+                const key = item[selectedKey];
+                
+                if (key === undefined) {
+                    continue; // Skip items that don't have the selected key
+                }
+                
+                // Convert to string to handle objects or arrays as key values
+                const keyStr = JSON.stringify(key);
+                
+                if (!uniqueMap.has(keyStr)) {
+                    uniqueMap.set(keyStr, true);
+                    uniqueData.push(item);
+                }
+            }
+
+            // Count removed duplicates
+            const removedCount = jsonData.length - uniqueData.length;
+
+            // Format the output JSON with the detected indentation
+            const resultJson = JSON.stringify(uniqueData, null, originalIndentation);
+
+            // Edit the file with the deduplicated JSON
             const fullRange = new vscode.Range(
                 document.positionAt(0),
                 document.positionAt(text.length)
             );
 
             const edit = new vscode.WorkspaceEdit();
-            edit.replace(document.uri, fullRange, resultText);
+            edit.replace(document.uri, fullRange, resultJson);
             await vscode.workspace.applyEdit(edit);
 
-            // Success message
-            const remainingCount = jsonData.length - indicesToRemove.length;
+            // Show success message
             vscode.window.showInformationMessage(
-                `Removed ${indicesToRemove.length} duplicate(s) based on "${selectedKey}". ${remainingCount} unique item(s) remain.`
+                `Removed ${removedCount} duplicate(s) based on "${selectedKey}". ${uniqueData.length} unique item(s) remain.`
             );
 
         } catch (error) {
@@ -220,5 +345,7 @@ function deactivate() {}
 
 module.exports = {
     activate,
-    deactivate
+    deactivate,
+    detectIndentation,
+    detectIndentationWithDebug
 };
